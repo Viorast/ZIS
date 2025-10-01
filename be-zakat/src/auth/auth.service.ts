@@ -2,20 +2,18 @@ import { Injectable, UnauthorizedException, ConflictException, NotFoundException
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from 'src/prisma.service';
 import * as bcrypt from 'bcrypt';
-import {
-  AdminLoginDto,
-  AdminRegisterDto,
-  AdminResponseDto,
-  AdminAuthResponseDto,
-  UserLoginDto,
-  UserRegisterDto,
-  UserResponseDto,
-  UserAuthResponseDto,
-  JwtPayloadDto,
-  ChangePasswordDto,
-  ForgotPasswordDto,
-  ResetPasswordDto,
-} from './dto';
+import * as crypto from 'crypto';
+import { 
+  UnifiedLoginDto, 
+  UnifiedRegisterDto, 
+  UnifiedAuthResponseDto 
+} from './dto/unified-auth.dto';
+import { UserRole } from '@prisma/client';
+import { 
+  ChangePasswordDto, 
+  ForgotPasswordDto, 
+  ResetPasswordDto 
+} from './dto/common-auth.dto';
 
 @Injectable()
 export class AuthService {
@@ -24,372 +22,251 @@ export class AuthService {
         private readonly jwtService: JwtService,
     ) {}
 
-    //admin Auth
-    async adminLogin(AdminLoginDto: AdminLoginDto): Promise<AdminAuthResponseDto> {
-        const { email, password} = AdminLoginDto;
-
-        const admin = await this.prismaService.admin.findUnique({
-            where: { email },
-        })
-
-        if(!admin ){
-            throw new UnauthorizedException('Login gagal');
-        }
-
-        const isPasswordValid = await bcrypt.compare(password, admin.password);
-        if(!isPasswordValid) {
-            throw new UnauthorizedException('Password salah')
-        }
-
-        const payload: JwtPayloadDto = {
-            sub: admin.id,
-            type: 'admin',
-        };
-
-        const access_token = this.jwtService.sign(payload);
-
-        const adminResponse: AdminResponseDto = {
-            id: admin.id,
-            username: admin.username,
-            email: admin.email,
-            fullName: admin.fullName,
-            role: admin.role,
-            createdAt: admin.createdAt,
-            updatedAt: admin.updatedAt,
-        };
-
-        return {
-            access_token,
-            admin: adminResponse
-        }
-    }
-
-    async adminRegister(adminRegisterDto: AdminRegisterDto): Promise<AdminResponseDto> {
-        const { username, email, password, fullName, role} = adminRegisterDto;
-
-        // Check if admin alredy exists
-        const existingAdmin = await this.prismaService.admin.findFirst({
-            where: {
-                OR: [
-                    { username },
-                    { email },
-                ],
-            },
-        });
-
-        if(existingAdmin) {
-            throw new ConflictException('Admin dengan username atau email ini sudah ada')
-        }
-
-        //Hash pass
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        //Create admin
-        const admin = await this.prismaService.admin.create({
-            data: {
-                username,
-                email,
-                password: hashedPassword,
-                fullName,
-                role
-            },
-        });
-
-        return {
-            id: admin.id,
-            username: admin.username,
-            email: admin.email,
-            fullName: admin.fullName,
-            role: admin.role,
-            createdAt: admin.createdAt,
-            updatedAt: admin.updatedAt,
-        };
-    }
-
-    // User auth
-    async userLogin(userLoginDto: UserLoginDto): Promise<UserAuthResponseDto> {
-        const { email, password } = userLoginDto;
+    // User Login
+    async unifiedLogin(loginDto: UnifiedLoginDto): Promise<UnifiedAuthResponseDto> {
+        const { email, password } = loginDto;
 
         const user = await this.prismaService.user.findUnique({
             where: { email },
         });
 
-        if(!user) {
-            throw new UnauthorizedException('Login gagal')
+        if (!user) {
+            throw new UnauthorizedException('Login gagal');
         }
 
         const isPasswordValid = await bcrypt.compare(password, user.password);
-        if(!isPasswordValid){
-            throw new UnauthorizedException('password salah');
+        if (!isPasswordValid) {
+            throw new UnauthorizedException('Password salah');
         }
 
-        const payload: JwtPayloadDto = {
+        const payload = {
             sub: user.id,
-            type: 'user',
+            email: user.email,
+            role: user.role,
+            type: this.determineTokenType(user.role),
         };
 
         const access_token = this.jwtService.sign(payload);
 
-        const userResponse: UserResponseDto = {
-        id: user.id,
-        fullName: user.fullName ?? '',
-        nomorHp: user.nomorHp ?? undefined,
-        email: user.email,
-        createdAt: user.createdAt,
-        updatedAt: user.updatedAt,
-        };
+        const userResponse = this.formatUserResponse(user);
 
         return {
-        access_token,
-        user: userResponse,
+            access_token,
+            user: userResponse
         };
     }
 
-    async userRegister(userRegisterDto: UserRegisterDto): Promise<UserResponseDto> {
-        const { email, password, fullName, nomorHp} = userRegisterDto;
+    //  Register 
+    async unifiedRegister(registerDto: UnifiedRegisterDto): Promise<any> {
+        const { email, password, fullName, nomorHp, role, pengurusID } = registerDto;
 
         // Check jika user sudah ada
         const existingUser = await this.prismaService.user.findUnique({
             where: { email },
         });
 
-        if (existingUser){
-            throw new ConflictException('User dengan username atau email ini sudah ada')
+        if (existingUser) {
+            throw new ConflictException('User dengan email ini sudah ada');
         }
 
-        //Hash pass
+        // Default role untuk registrasi public
+        const userRole = role || UserRole.JAMAAH;
+
+        // Validasi: Hanya JAMAAH yang bisa register via public endpoint
+        if (userRole !== UserRole.JAMAAH) {
+            throw new UnauthorizedException('Hanya bisa mendaftar sebagai jamaah');
+        }
+
+        // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        //Create User
+        // Create user 
         const user = await this.prismaService.user.create({
             data: {
                 email,
                 password: hashedPassword,
                 fullName,
                 nomorHp,
-            }
-        })
+                role: userRole,
+                pengurusId: pengurusID,
+            },
+        });
 
-        return {
+        return this.formatUserResponse(user);
+    }
+
+    // Helper Methods
+    private determineTokenType(role: UserRole): string {
+        switch (role) {
+            case UserRole.JAMAAH:
+                return 'user';
+            case UserRole.PENGURUS:
+            case UserRole.BENDAHARA:
+            case UserRole.SUPER_ADMIN:
+                return 'admin';
+            default:
+                return 'user';
+        }
+    }
+
+    private formatUserResponse(user: any) {
+        const baseResponse = {
             id: user.id,
             email: user.email,
-            fullName: user.fullName ?? '',
-            nomorHp: user.nomorHp ?? undefined,
+            fullName: user.fullName,
+            nomorHp: user.nomorHp,
+            role: user.role,
             createdAt: user.createdAt,
             updatedAt: user.updatedAt,
         };
+
+        // Tambahkan fields khusus berdasarkan role
+        if (user.role !== UserRole.JAMAAH) {
+            return {
+                ...baseResponse,
+                pengurusId: user.pengurusID, 
+            };
+        }
+
+        return baseResponse;
     }
 
-    // Password Management
-    async changeAdminPassword(adminId: string, changePasswordDto: ChangePasswordDto): Promise<{ message: string }> {
-        const { currentPassword, newPassword, confirmPassword } = changePasswordDto;
-
-        if (newPassword !== confirmPassword) {
-        throw new BadRequestException('New passwords do not match');
-        }
-
-        const admin = await this.prismaService.admin.findUnique({
-        where: { id: adminId },
-        });
-
-        if (!admin) {
-        throw new NotFoundException('Admin not found');
-        }
-
-        const isCurrentPasswordValid = await bcrypt.compare(currentPassword, admin.password);
-        if (!isCurrentPasswordValid) {
-        throw new UnauthorizedException('Current password is incorrect');
-        }
-
-        const hashedNewPassword = await bcrypt.hash(newPassword, 10);
-
-        await this.prismaService.admin.update({
-        where: { id: adminId },
-        data: { password: hashedNewPassword },
-        });
-
-        return { message: 'Password changed successfully' };
-    }
-
-    async changeUserPassword(userId: string, changePasswordDto: ChangePasswordDto): Promise<{ message: string }> {
-        const { currentPassword, newPassword, confirmPassword } = changePasswordDto;
-
-        if (newPassword !== confirmPassword) {
-        throw new BadRequestException('New passwords do not match');
-        }
+    // FORGOT PASSWORD 
+    async forgotPassword(forgotPasswordDto: ForgotPasswordDto): Promise<{ message: string }> {
+        const { email } = forgotPasswordDto;
 
         const user = await this.prismaService.user.findUnique({
-        where: { id: userId },
+            where: { email },
         });
 
         if (!user) {
-        throw new NotFoundException('User not found');
+            return { message: 'Jika email terdaftar, link reset password akan dikirim' };
+        }
+
+        //  Generate secure token
+        const resetToken = crypto.randomBytes(32).toString('hex');
+        const resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000); // 15 menit
+        
+        //  Hash token 
+        const hashedToken = await bcrypt.hash(resetToken, 10);
+
+        try {
+            await this.prismaService.user.update({
+                where: { id: user.id },
+                data: {
+                    resetToken: hashedToken,
+                    resetTokenExpiry,
+                },
+            });
+
+            // KIRIM EMAIL DENGAN LINK + TOKEN
+            // Hanya perlu ganti bagian ini dengan service email yang sebenarnya
+            // Contoh link: https://yourdomain.com/reset-password?token=RESET_TOKEN
+            // Ganti 'yourdomain.com' dengan domain aplikasi 
+            // Kirim email ke user.email dengan link di atas
+            const resetLink = `https://yourdomain.com/reset-password?token=${resetToken}`;
+            
+            console.log(`Reset Password Link untuk ${email}: ${resetLink}`);
+            
+            // TODO: Implement email service
+            // await this.emailService.sendResetPasswordEmail(email, resetLink, resetToken);
+
+        } catch (error) {
+            console.error('Error storing reset token:', error);
+            throw new BadRequestException('Gagal memproses permintaan reset password');
+        }
+
+        return { message: 'Jika email terdaftar, link reset password akan dikirim' };
+    }
+
+    // RESET PASSWORD
+    async resetPassword(resetPasswordDto: ResetPasswordDto): Promise<{ message: string }> {
+        const { token, newPassword, confirmPassword } = resetPasswordDto;
+
+        if (newPassword !== confirmPassword) {
+            throw new BadRequestException('Password tidak cocok');
+        }
+
+        // Validasi token
+        const validation = await this.validateResetToken(token);
+        if (!validation.valid) {
+            throw new UnauthorizedException('Token reset tidak valid atau sudah kedaluwarsa');
+        }
+
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        // Update password dan clear reset token
+        await this.prismaService.user.update({
+            where: { id: validation.userId },
+            data: {
+                password: hashedPassword,
+                resetToken: null,
+                resetTokenExpiry: null,
+            },
+        });
+
+        return { message: 'Password berhasil direset' };
+    }
+
+    async validateResetToken(token: string): Promise<{ 
+        valid: boolean; 
+        email?: string; 
+        userId?: string;
+        message?: string;
+    }> {
+        if (!token || token.length !== 64 || !/^[a-f0-9]+$/i.test(token)) {
+            return { valid: false, message: 'Format token tidak valid' };
+        }
+
+        const users = await this.prismaService.user.findMany({
+            where: {
+                resetTokenExpiry: {
+                    gt: new Date(), 
+                },
+            },
+        });
+
+        for (const user of users) {
+            if (user.resetToken && await bcrypt.compare(token, user.resetToken)) {
+                return { 
+                    valid: true, 
+                    email: user.email,
+                    userId: user.id
+                };
+            }
+        }
+
+        return { valid: false, message: 'Token tidak valid atau sudah kedaluwarsa' };
+    }
+
+    // CHANGE PASSWORD
+    async changePassword(userId: string, changePasswordDto: ChangePasswordDto): Promise<{ message: string }> {
+        const { currentPassword, newPassword, confirmPassword } = changePasswordDto;
+
+        if (newPassword !== confirmPassword) {
+            throw new BadRequestException('Password baru tidak cocok');
+        }
+
+        const user = await this.prismaService.user.findUnique({
+            where: { id: userId },
+        });
+
+        if (!user) {
+            throw new NotFoundException('User tidak ditemukan');
         }
 
         const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
         if (!isCurrentPasswordValid) {
-        throw new UnauthorizedException('Current password is incorrect');
+            throw new UnauthorizedException('Password saat ini salah');
         }
 
         const hashedNewPassword = await bcrypt.hash(newPassword, 10);
 
         await this.prismaService.user.update({
-        where: { id: userId },
-        data: { password: hashedNewPassword },
+            where: { id: userId },
+            data: { password: hashedNewPassword },
         });
 
-        return { message: 'Password changed successfully' };
+        return { message: 'Password berhasil diubah' };
     }
-
-    // Forgot Password Management
-  async adminForgotPassword(forgotPasswordDto: ForgotPasswordDto): Promise<{ message: string }> {
-    const { email } = forgotPasswordDto;
-
-    const admin = await this.prismaService.admin.findUnique({
-      where: { email },
-    });
-
-    if (!admin) {
-      // Return success message even if admin not found for security
-      return { message: 'If the email exists, a password reset link has been sent' };
-    }
-
-    // Generate reset token (6 digit random number)
-    const resetToken = Math.floor(100000 + Math.random() * 900000).toString();
-    const resetTokenExpiry = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
-
-    // In a real application, you would:
-    // 1. Store the reset token in database (you might need to add fields to Admin model)
-    // 2. Send email with reset token
-    // For now, we'll just log it (remove in production)
-    console.log(`Admin Password Reset Token for ${email}: ${resetToken}`);
-
-    // Store reset token (you need to add resetToken and resetTokenExpiry fields to Admin model)
-    // await this.prismaService.admin.update({
-    //   where: { id: admin.id },
-    //   data: {
-    //     resetToken,
-    //     resetTokenExpiry,
-    //   },
-    // });
-
-    return { message: 'If the email exists, a password reset link has been sent' };
-  }
-
-  async adminResetPassword(resetPasswordDto: ResetPasswordDto): Promise<{ message: string }> {
-    const { token, newPassword, confirmPassword } = resetPasswordDto;
-
-    if (newPassword !== confirmPassword) {
-      throw new BadRequestException('Passwords do not match');
-    }
-
-    // In a real application, you would find admin by reset token and check expiry
-    // const admin = await this.prismaService.admin.findFirst({
-    //   where: {
-    //     resetToken: token,
-    //     resetTokenExpiry: {
-    //       gt: new Date(),
-    //     },
-    //   },
-    // });
-
-    // if (!admin) {
-    //   throw new UnauthorizedException('Invalid or expired reset token');
-    // }
-
-    // For demo purposes, we'll just validate the token format
-    if (!token || token.length !== 6) {
-      throw new UnauthorizedException('Invalid reset token');
-    }
-
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-
-    // Update password and clear reset token
-    // await this.prismaService.admin.update({
-    //   where: { id: admin.id },
-    //   data: {
-    //     password: hashedPassword,
-    //     resetToken: null,
-    //     resetTokenExpiry: null,
-    //   },
-    // });
-
-    return { message: 'Password reset successfully' };
-  }
-
-  async userForgotPassword(forgotPasswordDto: ForgotPasswordDto): Promise<{ message: string }> {
-    const { email } = forgotPasswordDto;
-
-    const user = await this.prismaService.user.findUnique({
-      where: { email },
-    });
-
-    if (!user) {
-      // Return success message even if user not found for security
-      return { message: 'If the email exists, a password reset link has been sent' };
-    }
-
-    // Generate reset token (6 digit random number)
-    const resetToken = Math.floor(100000 + Math.random() * 900000).toString();
-    const resetTokenExpiry = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
-
-    // In a real application, you would:
-    // 1. Store the reset token in database (you might need to add fields to User model)
-    // 2. Send email with reset token
-    // For now, we'll just log it (remove in production)
-    console.log(`User Password Reset Token for ${email}: ${resetToken}`);
-
-    // Store reset token (you need to add resetToken and resetTokenExpiry fields to User model)
-    // await this.prismaService.user.update({
-    //   where: { id: user.id },
-    //   data: {
-    //     resetToken,
-    //     resetTokenExpiry,
-    //   },
-    // });
-
-    return { message: 'If the email exists, a password reset link has been sent' };
-  }
-
-  async userResetPassword(resetPasswordDto: ResetPasswordDto): Promise<{ message: string }> {
-    const { token, newPassword, confirmPassword } = resetPasswordDto;
-
-    if (newPassword !== confirmPassword) {
-      throw new BadRequestException('Passwords do not match');
-    }
-
-    // In a real application, you would find user by reset token and check expiry
-    // const user = await this.prismaService.user.findFirst({
-    //   where: {
-    //     resetToken: token,
-    //     resetTokenExpiry: {
-    //       gt: new Date(),
-    //     },
-    //   },
-    // });
-
-    // if (!user) {
-    //   throw new UnauthorizedException('Invalid or expired reset token');
-    // }
-
-    // For demo purposes, we'll just validate the token format
-    if (!token || token.length !== 6) {
-      throw new UnauthorizedException('Invalid reset token');
-    }
-
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-
-    // Update password and clear reset token
-    // await this.prismaService.user.update({
-    //   where: { id: user.id },
-    //   data: {
-    //     password: hashedPassword,
-    //     resetToken: null,
-    //     resetTokenExpiry: null,
-    //   },
-    // });
-
-    return { message: 'Password reset successfully' };
-  }
-
 }

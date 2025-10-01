@@ -85,13 +85,6 @@ export class ZakatTransactionService {
             email: true
           }
         },
-        admin: {
-          select: {
-            id: true,
-            fullName: true,
-            username: true
-          }
-        }
       }
     });
 

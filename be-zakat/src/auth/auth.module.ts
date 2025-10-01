@@ -3,9 +3,9 @@ import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
-import { AdminJwtStrategy } from '../strategies/admin-jwt.strategy';
-import { UserJwtStrategy } from '../strategies/user-jwt.strategy';
+import { UnifiedJwtStrategy } from '../strategies/unified-jwt.strategy';
 import { PrismaService } from 'src/prisma.service';
+import { GoogleAuthController } from './controllers/google-auth.controller';
 
 @Module({
   imports: [
@@ -15,12 +15,12 @@ import { PrismaService } from 'src/prisma.service';
       signOptions: { expiresIn: process.env.JWT_EXPIRES_IN},
     })
   ],
-  controllers: [AuthController],
+  controllers: [AuthController, GoogleAuthController],
   providers: [
     PrismaService,
     AuthService, 
-    AdminJwtStrategy, 
-    UserJwtStrategy,
+    UnifiedJwtStrategy,
+    GoogleAuthController
   ],
   exports: [AuthService],
 })

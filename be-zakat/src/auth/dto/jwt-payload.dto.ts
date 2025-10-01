@@ -1,15 +1,16 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { UserRole } from '../../users/dto/user-role.enum';
 
 export class JwtPayloadDto {
-  @ApiProperty({ description: 'User/Admin ID', example: 'uuid-string' })
+  @ApiProperty({ description: 'Subject (user ID)' })
   sub: string;
 
-  @ApiProperty({ description: 'Token type', enum: ['admin', 'user'], example: 'user' })
-  type: 'admin' | 'user';
+  @ApiProperty({ description: 'Email' })
+  email: string;
 
-  @ApiProperty({ description: 'Issued at', example: 1640995200 })
-  iat?: number;
+  @ApiProperty({ enum: UserRole, description: 'User role' })
+  role: UserRole;
 
-  @ApiProperty({ description: 'Expires at', example: 1640995200 })
-  exp?: number;
+  @ApiProperty({ description: 'Token type for backward compatibility' })
+  type: string;
 }

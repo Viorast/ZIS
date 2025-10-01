@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -13,106 +7,102 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Admin {
-  id         String   @id @default(uuid())
-  username   String   @unique
-  email      String   @unique
-  password   String
-  fullName   String   @map("full_name")
-  role       AdminRole 
-  employeeID String? @map("employee_id")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  infaqTransactions InfaqTransaction[]
-  zakatTransactions ZakatTransaction[]
-
-  @@map("admins")
-}
-
+// User Models
 model User {
-  id           String   @id @default(uuid())
-  fullName  String?  @map("full_name")
+  id           String    @id @default(uuid())
+  fullName     String?   @map("full_name")
   gender       Gender?
-  tempatLahir  String?  @map("tempat_lahir")
+  tempatLahir  String?   @map("tempat_lahir")
   tanggalLahir DateTime? @map("tanggal_lahir")
-  nomorHp      String?  @map("nomor_hp")
-  nomorKtp     String?  @map("nomor_ktp")
+  nomorHp      String?   @map("nomor_hp")
+  nomorKtp     String?   @map("nomor_ktp")
   alamat       String?
-  email        String   @unique
+  email        String    @unique
   password     String
-  fotoProfil   String?  @map("foto_profil")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  fotoProfil   String?   @map("foto_profil")
+  role         UserRole  @default(JAMAAH) // tambahkan role disini
+  pengurusId   String?   @map("pengurus_id")
+  isGoogleAuth Boolean   @default(false)
+  googleId     String?   @unique
+
+  // Reset Password Fields
+  resetToken      String?   @map("reset_token")
+  resetTokenExpiry DateTime? @map("reset_token_expiry")
+
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
 
   // Relations
-  infaqTransactions InfaqTransaction[]
-  zakatTransactions ZakatTransaction[]
+  infaqTransactions          InfaqTransaction[]
+  zakatTransactions          ZakatTransaction[]
+  processedInfaqTransactions InfaqTransaction[] @relation("ProcessedInfaqTransactions")
+  processedZakatTransactions ZakatTransaction[] @relation("ProcessedZakatTransactions")
 
   @@map("users")
 }
 
 model InfaqTransaction {
-  id            String        @id @default(uuid())
-  userId        String        @map("user_id")
-  adminId       String?       @map("admin_id")
-  nominal       Decimal       @db.Decimal(15, 2)
-  paymentMethod PaymentMethod @map("payment_method")
-  status        TransactionStatus
-  buktiPembayaran String?     @map("bukti_pembayaran") // URL/path untuk bukti pembayaran
-  midtransId    String?       @map("midtrans_id") // ID transaksi dari Midtrans
-  catatan       String?       // Catatan tambahan dari donatur
-  tanggalPembayaran DateTime? @map("tanggal_pembayaran")
-  createdAt     DateTime      @default(now()) @map("created_at")
-  updatedAt     DateTime      @updatedAt @map("updated_at")
+  id                String            @id @default(uuid())
+  userId            String            @map("user_id")
+  processedById     String?           @map("processed_by_id")
+  nominal           Decimal           @db.Decimal(15, 2)
+  paymentMethod     PaymentMethod     @map("payment_method")
+  status            TransactionStatus
+  buktiPembayaran   String?           @map("bukti_pembayaran") // URL/path untuk bukti pembayaran
+  midtransId        String?           @map("midtrans_id") // ID transaksi dari Midtrans
+  catatan           String? // Catatan tambahan dari donatur
+  tanggalPembayaran DateTime?         @map("tanggal_pembayaran")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
 
   // Relations
-  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  admin Admin? @relation(fields: [adminId], references: [id])
+  user        User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  processedBy User? @relation("ProcessedInfaqTransactions", fields: [processedById], references: [id])
 
   @@map("infaq_transactions")
 }
 
 model ZakatTransaction {
-  id            String        @id @default(uuid())
-  userId        String        @map("user_id")
-  adminId       String?       @map("admin_id")
-  jenisZakat    ZakatType     @map("jenis_zakat")
-  nominal       Decimal       @db.Decimal(15, 2)
-  paymentMethod PaymentMethod @map("payment_method")
-  status        TransactionStatus
-  buktiPembayaran String?     @map("bukti_pembayaran") // URL/path untuk bukti pembayaran
-  midtransId    String?       @map("midtrans_id") // ID transaksi dari Midtrans
-  catatan       String?       // Catatan tambahan dari donatur
-  tanggalPembayaran DateTime? @map("tanggal_pembayaran")
-  createdAt     DateTime      @default(now()) @map("created_at")
-  updatedAt     DateTime      @updatedAt @map("updated_at")
+  id                String            @id @default(uuid())
+  userId            String            @map("user_id")
+  processedById     String?           @map("processed_by_id")
+  jenisZakat        ZakatType         @map("jenis_zakat")
+  nominal           Decimal           @db.Decimal(15, 2)
+  paymentMethod     PaymentMethod     @map("payment_method")
+  status            TransactionStatus
+  buktiPembayaran   String?           @map("bukti_pembayaran")
+  midtransId        String?           @map("midtrans_id")
+  catatan           String?
+  tanggalPembayaran DateTime?         @map("tanggal_pembayaran")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
 
   // Relations
-  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  admin Admin? @relation(fields: [adminId], references: [id])
+  user        User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  processedBy User? @relation("ProcessedZakatTransactions", fields: [processedById], references: [id])
 
   @@map("zakat_transactions")
 }
 
 model ZakatConfig {
-  id             String   @id @default(uuid())
-  jenisZakat     ZakatType
-  key            String
-  value          Float
-  satuan         String?
-  updatedAt      DateTime @updatedAt
-  createdAt      DateTime @default(now())
+  id         String    @id @default(uuid())
+  jenisZakat ZakatType
+  key        String
+  value      Float
+  satuan     String?
+  updatedAt  DateTime  @updatedAt
+  createdAt  DateTime  @default(now())
 
   @@unique([jenisZakat, key])
 }
 
 // Enums
 
-enum AdminRole {
-  PETUGAS
+enum UserRole {
+  JAMAAH
+  PENGURUS
   BENDAHARA
+  SUPER_ADMIN
 }
 
 enum Gender {
@@ -121,9 +111,9 @@ enum Gender {
 }
 
 enum PaymentMethod {
-  MIDTRANS   // Transaksi otomatis (online)
+  MIDTRANS // Transaksi otomatis (online)
   QRIS_MANUAL // Scan QRIS masjid + upload bukti
-  TUNAI      // Diinput manual oleh petugas
+  TUNAI // Diinput manual oleh petugas
 }
 
 enum TransactionStatus {
@@ -133,6 +123,7 @@ enum TransactionStatus {
   CANCELLED
   FAILED
 }
+
 enum ZakatType {
   FITRAH
   MAAL
@@ -140,4 +131,3 @@ enum ZakatType {
   EMAS
   FIDYAH
 }
-

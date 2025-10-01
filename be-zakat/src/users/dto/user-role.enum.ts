@@ -1,0 +1,6 @@
+export enum UserRole {
+  JAMAAH = 'JAMAAH',
+  PENGURUS = 'PENGURUS', 
+  BENDAHARA = 'BENDAHARA',
+  SUPER_ADMIN = 'SUPER_ADMIN'
+}

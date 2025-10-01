@@ -8,174 +8,110 @@ import {
   ApiUnauthorizedResponse, 
   ApiBadRequestResponse,
   ApiConflictResponse,
-  ApiNotFoundResponse,
 } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
-import {
-  AdminLoginDto,
-  AdminRegisterDto,
-  AdminResponseDto,
-  AdminAuthResponseDto,
-  UserLoginDto,
-  UserRegisterDto,
-  UserResponseDto,
-  UserAuthResponseDto,
-  ChangePasswordDto,
-  ForgotPasswordDto,
-  ResetPasswordDto,
-  MessageResponseDto,
-} from './dto';
+import { UnifiedLoginDto, UnifiedRegisterDto, UnifiedAuthResponseDto } from './dto/unified-auth.dto';
+import { ChangePasswordDto, ForgotPasswordDto, ResetPasswordDto, MessageResponseDto, ValidateResetTokenDto } from './dto/common-auth.dto';
 
+@ApiTags('Auth') 
 @Controller('auth')
 export class AuthController {
     constructor(private readonly authService: AuthService) {}
 
-    //Admin Auth Endpoints
-    @Post('admin/login')
+    // Unified Login Endpoint
+    @Post('login')
     @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: 'Admin login' })
+    @ApiOperation({ summary: 'Login user' })
     @ApiResponse({
         status: 200,
-        description: 'Admin successfully logged in',
-        type: AdminAuthResponseDto,
+        description: 'Successfully logged in',
+        type: UnifiedAuthResponseDto,
     })
     @ApiUnauthorizedResponse({ description: 'Invalid credentials' })
-    async adminLogin(@Body() adminLoginDto: AdminLoginDto): Promise<AdminAuthResponseDto> {
-        return this.authService.adminLogin(adminLoginDto);
-    }
-
-    @Post('admin/register')
-    @ApiOperation({ summary: 'Register new admin' })
-    @ApiResponse({
-        status: 201,
-        description: 'Admin successfully created',
-        type: AdminResponseDto,
-    })
-    @ApiConflictResponse({ description: 'Admin with this username or email already exists' })
     @ApiBadRequestResponse({ description: 'Invalid input data' })
-    async adminRegister(@Body() adminRegisterDto: AdminRegisterDto): Promise<AdminResponseDto> {
-        return this.authService.adminRegister(adminRegisterDto);
+    async login(@Body() loginDto: UnifiedLoginDto): Promise<UnifiedAuthResponseDto> {
+        return this.authService.unifiedLogin(loginDto);
     }
 
-    @Patch('admin/change-password')
-    @UseGuards(AuthGuard('admin-jwt'))
-    @ApiBearerAuth('JWT-auth')
-    @ApiOperation({ summary: 'Change admin password' })
-    @ApiResponse({
-        status: 200,
-        description: 'Password changed successfully',
-        type: MessageResponseDto,
-    })
-    @ApiUnauthorizedResponse({ description: 'Unauthorized - Invalid or missing token / Current password is incorrect' })
-    @ApiBadRequestResponse({ description: 'New passwords do not match' })
-    async changeAdminPassword(
-        @Request() req,
-        @Body() changePasswordDto: ChangePasswordDto,
-    ): Promise<{ message: string}> {
-        return this.authService.changeAdminPassword(req.user.UserId, changePasswordDto);
-    }
-
-    // User Auth Endpoints
-    @Post('user/login')
-    @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: 'User login' })
-    @ApiResponse({
-        status: 200,
-        description: 'User successfully logged in',
-        type: UserAuthResponseDto,
-    })
-    @ApiUnauthorizedResponse({ description: 'Invalid credentials' })
-    async userLogin(
-        @Body() userLoginDto: UserLoginDto
-    ): Promise<UserAuthResponseDto>{
-        return this.authService.userLogin(userLoginDto);
-    }
-    
-    @Post('user/register')
+    @Post('register')
     @ApiOperation({ summary: 'Register new user' })
     @ApiResponse({
         status: 201,
-        description: 'User successfully created',
-        type: UserResponseDto,
+        description: 'User successfully registered',
+        type: UnifiedAuthResponseDto,
     })
     @ApiConflictResponse({ description: 'User with this email already exists' })
     @ApiBadRequestResponse({ description: 'Invalid input data' })
-    async userRegister(
-        @Body() userRegisterDto: UserRegisterDto
-    ): Promise<UserResponseDto>{
-        return this.authService.userRegister(userRegisterDto);
+    async register(@Body() registerDto: UnifiedRegisterDto): Promise<UnifiedAuthResponseDto> {
+        return this.authService.unifiedRegister(registerDto);
     }
-
-    @Patch('user/change-password')
-    @UseGuards(AuthGuard('user-jwt'))
-    @ApiBearerAuth('JWT-auth')
-    @ApiOperation({ summary: 'Change user password' })
+    
+    @Patch('change-password')
+    @UseGuards(AuthGuard('unified-jwt'))
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Change password for logged-in user' })
     @ApiResponse({
         status: 200,
-        description: 'Password changed successfully',
+        description: 'Password successfully changed',
         type: MessageResponseDto,
     })
-    @ApiUnauthorizedResponse({ description: 'Unauthorized - Invalid or missing token / Current password is incorrect' })
-    @ApiBadRequestResponse({ description: 'New passwords do not match' })
-    async changeUserPassword(
+    @ApiUnauthorizedResponse({ description: 'Invalid or missing token' })
+    @ApiBadRequestResponse({ description: 'Current password is incorrect or new passwords do not match' })
+    async changePassword(
         @Request() req,
-        @Body() changePasswordDto: ChangePasswordDto
-    ): Promise<{message: string}> {
-        return this.authService.changeUserPassword(req.user.userId, changePasswordDto)
+        @Body() changePasswordDto: ChangePasswordDto,
+    ): Promise<{ message: string}> {
+        return this.authService.changePassword(req.user.userId, changePasswordDto);
     }
 
-    // Forgot Password Endpoints
-    @Post('admin/forgot-password')
+    @Post('forgot-password')
     @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: 'Admin forgot password' })
+    @ApiOperation({ summary: 'Request password reset link' })
     @ApiResponse({
         status: 200,
-        description: 'Reset password email sent (if email exists)',
+        description: 'If email exists, reset link will be sent',
         type: MessageResponseDto,
     })
     @ApiBadRequestResponse({ description: 'Invalid email format' })
-    async adminForgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto): Promise<{ message: string }> {
-        return this.authService.adminForgotPassword(forgotPasswordDto);
+    async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto): Promise<{ message: string }> {
+        return this.authService.forgotPassword(forgotPasswordDto);
     }
 
-    @Post('admin/reset-password')
+    @Post('validate-reset-token')
     @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: 'Reset admin password' })
+    @ApiOperation({ summary: 'Validate password reset token' })
     @ApiResponse({
         status: 200,
-        description: 'Password reset successfully',
+        description: 'Token validation result',
+        schema: {
+            type: 'object',
+            properties: {
+                valid: { type: 'boolean' },
+                email: { type: 'string', nullable: true },
+                message: { type: 'string', nullable: true }
+            }
+        }
+    })
+    @ApiBadRequestResponse({ description: 'Invalid token format' })
+    async validateResetToken(@Body() validateDto: ValidateResetTokenDto): Promise<{ 
+        valid: boolean; 
+        email?: string;
+        message?: string;
+    }> {
+        return this.authService.validateResetToken(validateDto.token);
+    }
+
+    @Post('reset-password')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Reset password using valid token' })
+    @ApiResponse({
+        status: 200,
+        description: 'Password successfully reset',
         type: MessageResponseDto,
     })
     @ApiUnauthorizedResponse({ description: 'Invalid or expired reset token' })
-    @ApiBadRequestResponse({ description: 'Passwords do not match' })
-    async adminResetPassword(@Body() resetPasswordDto: ResetPasswordDto): Promise<{ message: string }> {
-        return this.authService.adminResetPassword(resetPasswordDto);
-    }
-
-    @Post('user/forgot-password')
-    @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: 'User forgot password' })
-    @ApiResponse({
-        status: 200,
-        description: 'Reset password email sent (if email exists)',
-        type: MessageResponseDto,
-    })
-    @ApiBadRequestResponse({ description: 'Invalid email format' })
-    async userForgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto): Promise<{ message: string }> {
-        return this.authService.userForgotPassword(forgotPasswordDto);
-    }
-
-    @Post('user/reset-password')
-    @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: 'Reset user password' })
-    @ApiResponse({
-        status: 200,
-        description: 'Password reset successfully',
-        type: MessageResponseDto,
-    })
-    @ApiUnauthorizedResponse({ description: 'Invalid or expired reset token' })
-    @ApiBadRequestResponse({ description: 'Passwords do not match' })
-    async userResetPassword(@Body() resetPasswordDto: ResetPasswordDto): Promise<{ message: string }> {
-        return this.authService.userResetPassword(resetPasswordDto);
+    @ApiBadRequestResponse({ description: 'Passwords do not match or invalid input' })
+    async resetPassword(@Body() resetPasswordDto: ResetPasswordDto): Promise<{ message: string }> {
+        return this.authService.resetPassword(resetPasswordDto);
     }
 }

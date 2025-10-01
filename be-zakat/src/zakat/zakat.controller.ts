@@ -24,7 +24,7 @@ import { ZakatService } from './zakat.service';
 import { ZakatCalculationService } from './services/zakat-calculation.service';
 import { ZakatPaymentService } from './services/zakat-payment.service';
 import { ZakatTransactionService } from './services/zakat-transaction.service';
-import { UserJwtGuard } from '../guards/user-jwt.guard';
+import { UnifiedJwtGuard as UserJwtGuard } from 'src/guards/unified-jwt.guard';
 import { User } from '../common/decorators/user.decorator';
 import { 
   ZakatFitrahCalculationDto,
