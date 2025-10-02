@@ -25,7 +25,7 @@ export class AuthController {
     @Post('setup-admin')
     async setupAdmin(@Body() setupDto: { secret: string }) {
         // Simple security check
-        if (setupDto.secret !== 'dev-setup-2024') {
+        if (setupDto.secret !== process.env.EX_SECRET) {
         throw new UnauthorizedException('Invalid secret');
         }
 

@@ -2,6 +2,7 @@
 /dist
 /node_modules
 /build
+/src/scripts/admin-setup.service.ts
 
 # Logs
 logs
