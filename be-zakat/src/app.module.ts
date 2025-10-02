@@ -1,10 +1,11 @@
 import { Module } from '@nestjs/common';
-import { AuthModule } from './auth/auth.module';
-import { UserModule } from './users/user.module';
-import { ZakatModule } from './zakat/zakat.module';
-import { MidtransController } from './midtrans/midtrans.controller';
-import { MidtransService } from './midtrans/midtrans.service';
-import { MidtransModule } from './midtrans/midtrans.module';
+import { AuthModule } from './modules/auth/auth.module';
+import { UserModule } from './modules/users/user.module';
+import { ZakatModule } from './modules/zakat/zakat.module';
+import { MidtransController } from './modules/midtrans/midtrans.controller';
+import { MidtransService } from './modules/midtrans/midtrans.service';
+import { MidtransModule } from './modules/midtrans/midtrans.module';
+import { ScriptsModule } from './scripts/scripts.module';
 import { ConfigModule } from '@nestjs/config';
 import midtransConfig from './config/midtrans.config';
 import zakatConfig from './config/zakat.config';
@@ -23,7 +24,8 @@ import { PrismaModule } from './prisma.module';
     AuthModule,  
     UserModule, 
     ZakatModule, 
-    MidtransModule
+    MidtransModule,
+    ScriptsModule
   ],
   controllers: [MidtransController],
   providers: [MidtransService],
