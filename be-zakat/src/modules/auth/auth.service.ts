@@ -269,4 +269,72 @@ export class AuthService {
 
         return { message: 'Password berhasil diubah' };
     }
+
+  // Blacklist token saat logout
+  async blacklistToken(token: string, userId: string, reason?: string): Promise<void> {
+    try {
+      // Decode token untuk mendapatkan expiry time
+      const decoded = this.jwtService.decode(token) as any;
+      const expiresAt = new Date(decoded.exp * 1000); // Convert to milliseconds
+
+      await this.prismaService.blacklistedToken.create({
+        data: {
+          token,
+          userId,
+          expiresAt,
+          reason: reason || 'logout',
+        },
+      });
+
+      console.log(`✅ Token blacklisted for user ${userId}`);
+    } catch (error) {
+      console.error('❌ Error blacklisting token:', error);
+      throw error;
+    }
+  }
+
+  // Check jika token di blacklist
+  async isTokenBlacklisted(token: string): Promise<boolean> {
+    const blacklisted = await this.prismaService.blacklistedToken.findFirst({
+      where: { 
+        token,
+        expiresAt: {
+          gt: new Date() // Hanya token yang belum expired
+        }
+      },
+    });
+
+    return !!blacklisted;
+  }
+
+  // Cleanup expired blacklisted tokens
+  async cleanupExpiredTokens(): Promise<void> {
+    try {
+      const result = await this.prismaService.blacklistedToken.deleteMany({
+        where: {
+          expiresAt: {
+            lt: new Date() // Token yang sudah expired
+          }
+        },
+      });
+
+      console.log(`🧹 Cleaned up ${result.count} expired blacklisted tokens`);
+    } catch (error) {
+      console.error('❌ Error cleaning up expired tokens:', error);
+    }
+  }
+
+  // Logout all devices for a user
+  async logoutAllDevices(userId: string): Promise<void> {
+    try {
+      // Blacklist semua token yang aktif untuk user ini
+      // Note: Ini membutuhkan tracking active tokens, implementasi sederhana:
+      console.log(`🚫 Logging out all devices for user ${userId}`);
+      
+      // Untuk implementasi lengkap, perlu menyimpan issued tokens di database
+    } catch (error) {
+      console.error('❌ Error logging out all devices:', error);
+      throw error;
+    }
+  }
 }

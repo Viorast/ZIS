@@ -17,6 +17,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { UserService } from './user.service';
+import { AuthGuard } from '@nestjs/passport';
 import { UnifiedJwtGuard } from '../../guards/unified-jwt.guard';
 import { RolesGuard } from '../../guards/roles.guard';
 import { Permissions } from '../../decorators/permissons.decorator';

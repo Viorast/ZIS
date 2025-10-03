@@ -12,7 +12,6 @@ import zakatConfig from './config/zakat.config';
 import databaseConfig from './config/database.config';
 import { PrismaModule } from './prisma.module';
 
-
 @Module({
   imports: [
      ConfigModule.forRoot({

@@ -96,6 +96,17 @@ model ZakatConfig {
   @@unique([jenisZakat, key])
 }
 
+model BlacklistedToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime @default(now())
+  createdAt DateTime @default(now())
+  reason    String?
+
+  @@map("blacklisted_tokens")
+}
+
 // Enums
 
 enum UserRole {

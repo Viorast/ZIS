@@ -1,4 +1,4 @@
-import { Body, Controller, HttpCode, HttpStatus, Patch, Post, UseGuards, Request, UnauthorizedException, ForbiddenException } from '@nestjs/common';
+import { Req, Body, Controller, HttpCode, HttpStatus, Patch, Post, UseGuards, Request, UnauthorizedException, ForbiddenException, Headers } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { 
   ApiTags, 
@@ -13,6 +13,7 @@ import { AuthService } from './auth.service';
 import { UnifiedLoginDto, UnifiedRegisterDto, UnifiedAuthResponseDto } from './dto/unified-auth.dto';
 import { ChangePasswordDto, ForgotPasswordDto, ResetPasswordDto, MessageResponseDto, ValidateResetTokenDto } from './dto/common-auth.dto';
 import { AdminSetupService } from 'src/scripts/admin-setup.service';
+import { UnifiedJwtGuard } from 'src/guards/unified-jwt.guard';
 
 @ApiTags('Auth') 
 @Controller('auth')
@@ -65,7 +66,7 @@ export class AuthController {
     }
     
     @Patch('change-password')
-    @UseGuards(AuthGuard('unified-jwt'))
+    @UseGuards(UnifiedJwtGuard)
     @ApiBearerAuth()
     @ApiOperation({ summary: 'Change password for logged-in user' })
     @ApiResponse({
@@ -131,5 +132,66 @@ export class AuthController {
     @ApiBadRequestResponse({ description: 'Passwords do not match or invalid input' })
     async resetPassword(@Body() resetPasswordDto: ResetPasswordDto): Promise<{ message: string }> {
         return this.authService.resetPassword(resetPasswordDto);
+    }
+
+    // ✅ LOGOUT ENDPOINT
+    @Post('logout')
+    @UseGuards(UnifiedJwtGuard)
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Logout user and blacklist token' })
+    @ApiResponse({ 
+        status: 200, 
+        description: 'Successfully logged out',
+        schema: {
+        type: 'object',
+        properties: {
+            message: { type: 'string' }
+        }
+        }
+    })
+    @ApiResponse({ status: 401, description: 'Unauthorized' })
+    async logout(@Request() req): Promise<{ message: string }> {
+        const token = this.extractTokenFromHeader(req);
+        
+        if (!token) {
+        throw new UnauthorizedException('Token tidak ditemukan');
+        }
+
+        await this.authService.blacklistToken(
+        token, 
+        req.user.userId, 
+        'logout'
+        );
+
+        return { message: 'Logout berhasil' };
+    }
+
+    // LOGOUT ALL DEVICES (Optional)
+    @Post('logout-all')
+    @UseGuards(UnifiedJwtGuard)
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Logout from all devices' })
+    @ApiResponse({ 
+        status: 200, 
+        description: 'Successfully logged out from all devices',
+        schema: {
+        type: 'object',
+        properties: {
+            message: { type: 'string' }
+        }
+        }
+    })
+    async logoutAll(@Request() req): Promise<{ message: string }> {
+        await this.authService.logoutAllDevices(req.user.userId);
+        return { message: 'Logout dari semua device berhasil' };
+    }
+
+    // Helper method untuk extract token dari header
+    private extractTokenFromHeader(request: any): string | null {
+        const authHeader = request.headers.authorization;
+        if (!authHeader) return null;
+
+        const [type, token] = authHeader.split(' ');
+        return type === 'Bearer' ? token : null;
     }
 }

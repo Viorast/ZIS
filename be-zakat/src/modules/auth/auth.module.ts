@@ -13,7 +13,10 @@ import { GoogleAuthController } from './controllers/google-auth.controller';
     PassportModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET || 'your-secret-key',
-      signOptions: { expiresIn: process.env.JWT_EXPIRES_IN},
+      signOptions: { 
+        expiresIn: process.env.JWT_EXPIRES_IN,
+        jwtid: Math.random().toString(36).substring(2) + Date.now().toString(36)
+      },
     })
   ],
   controllers: [AuthController, GoogleAuthController],
